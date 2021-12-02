@@ -1,4 +1,4 @@
-ï»¿<#
+<#
 .SYNOPSIS
     Sync AD with Skyward
 
@@ -101,9 +101,9 @@ $StudentOUTable = @{
     "NW MIDDLE SCHOOL"             =  "OU=NWMS,"
     "OH ELEMENTARY"                =  "OU=OHE,OU=Elementary,"
     "OH HIGH SCHOOL"               =  "OU=OHHS,"
-    "OH INTERMEDIATE"              =  "OU=OHIS,"
+    "OH INTERMEDIATE"              =  "OU=OHI,"
     "OH VIRTUAL ACADEMY"           =  "OU=OHVA,"
-    "OLYMPIC VIEW ELEMENTARY"      =  "OU=OVE,OU=Elementary,"
+    "O VIEW ELEMENTARY"            =  "OU=OVE,OU=Elementary,"
     "Out of District"              =  "OU=Out of District,OU=Inactive Students,"
     "PRESCHOOL SPECIAL EDUCATION"  =  "OU=Preschool-Sped,"
     "RUNNING START"                =  "OU=Running Start,OU=OHHS,"
@@ -118,7 +118,7 @@ $NoGradYears = @(
 )
 #sets up log
 if(!(Test-Path $Log)){
-        New-Item $Log -type file -Force | Out-Null
+        New-Item $Log -type file -Force > $null
 }
 
 #Check if AD module loaded
@@ -143,7 +143,7 @@ if (!(Test-Connection $DCServer -Quiet -Count 3)){
 
 if (!$SkipDownload){
     if (!(test-path $TempDownload)){
-        New-Item $TempDownload -ItemType Directory | Out-Null
+        New-Item $TempDownload -ItemType Directory > $null
     }
 
     #download student csv via SSH/SCP
@@ -166,6 +166,7 @@ if (!$SkipDownload){
     }
 }
 
+Write-Verbose 'Pulling Students from AD' -verbose
 $SkywardStudents = Import-Csv -Path "$TempDownload\Student.csv"
 $ADStudents = Get-AdUser -LDAPFilter "(&(objectCategory=user)(memberof=CN=GRP_StudentAccount,$StudentRootOU))" `
                          -Properties Name,EmailAddress,DistinguishedName,Description,EmployeeID,Enabled,MemberOf,ObjectGUID `
@@ -199,7 +200,7 @@ $TotalStudents = $SkywardStudents.Count
 foreach ($Student in $SkywardStudents){
     if ($Progress -and ($i % 10 -eq 0)){
         #Progress bar
-        Write-Progress -Activity "Processing Skyward Data" -Status "Student $i of $TotalStudents"  -PercentComplete ($i / $TotalStudents * 100)
+        Write-Progress -Activity 'Processing Skyward Data' -Status "Student $i of $TotalStudents"  -PercentComplete ($i / $TotalStudents * 100)
     }
     
     #Variables
@@ -214,11 +215,11 @@ foreach ($Student in $SkywardStudents){
         continue
     }
     
-    $Username = ($Email -split "@" )[0]
+    $Username = ($Email -split '@' )[0]
 
     #max length for samaccountname is 20
     if ($Username.length -gt 20){
-        $SamAccount = $Username[0..19] -join ""
+        $SamAccount = $Username[0..19] -join ''
     }else{
         $SamAccount = $Username
     }
@@ -241,39 +242,39 @@ foreach ($Student in $SkywardStudents){
 
         #Default studentGroups
         $ADGroups = New-Object System.Collections.ArrayList
-        $ADGroups.Add("GRP_StudentAccount") | Out-Null
-        $ADGroups.Add("GRP_StudentLicense") | Out-Null
-        #add other entities from skyward to high school OU
-        if ("RUNNING START","IGRAD ACADEMY" -contains $Student.'Entity Name'){
-            $ADGroups.Add("OHHS-Students") | Out-Null
+        $ADGroups.Add('GRP_StudentAccount') > $null
+        $ADGroups.Add('GRP_StudentLicense') > $null
+        #add other entities to OHHS
+        if ('RUNNING START','IGRAD ACADEMY' -contains $Student.'Entity Name'){
+            $ADGroups.Add("OHHS-Students") > $null
         }
 
-        $School=($StudentOUTable[$Student.'Entity Name'] -split "OU=")[1].Replace(",",$null)
+        $School=($StudentOUTable[$Student.'Entity Name'] -split 'OU=')[1].Replace(',',$null)
         
-        if ($School -ne "Out of District"){
+        if ($School -ne 'Out of District'){
             $StuSchoolGroup = "$School-Students"
-            $ADGroups.Add($StuSchoolGroup) | Out-Null
+            $ADGroups.Add($StuSchoolGroup) > $null
         }
         if (!$NoGradYearStu){
             $StuGradGroup = "$School-$($Student.'Stu Grad Yr')"
-            $ADGroups.Add($StuGradGroup) | Out-Null
+            $ADGroups.Add($StuGradGroup) > $null
         }else{
             $StuGradGroup = $null
         }
 
-        if ($School -ne "Out of District"){
+        if ($School -ne 'Out of District'){
             #Check if groups are present and if not create
             #Student Year Group
             if (($StuGradGroup) -and (![adsi]::Exists("LDAP://CN=$StuGradGroup,OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU"))){
                 #Group does not exist create
-                New-ADGroup -Name $StuGradGroup -groupscope Global â€“path "OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
+                New-ADGroup -Name $StuGradGroup -groupscope Global –path "OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
                     -OtherAttributes @{mail="$StuGradGroup@students.$Domain"} `
                     -Server $DCServer
             }
             #Student School Group
             if (! [adsi]::Exists("LDAP://CN=$StuSchoolGroup,$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU")){
                 #Group does not exist create
-                New-ADGroup -Name $StuSchoolGroup -groupscope Global â€“path "$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
+                New-ADGroup -Name $StuSchoolGroup -groupscope Global –path "$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
                     -OtherAttributes @{mail="$StuSchoolGroup@students.$Domain"} `
                     -Server $DCServer -ErrorAction Stop
             }
@@ -282,76 +283,89 @@ foreach ($Student in $SkywardStudents){
 
         #Check for student
         $ID = [string]$Student.'Other ID'
-        $ADStudent = $ADStudents | Where-Object EmployeeID -eq $ID
+
+        #Find student in AD table
+        $ADStudent = $null
+        foreach ($s in $ADStudents){
+            if ($s.EmployeeID -eq $ID){
+                 $ADStudent = $s
+                 continue
+            }
+        }
         
         #skip if student is set to not track
-        if ($ADStudent.Description -ne "do not track"){
+        if ($ADStudent.Description -ne 'do not track'){
             if ($null -ne $ADStudent){
 
-            #Verify student email matches
-            if ($ADStudent.EmailAddress -ne $Email){
-                $ADStudent | Set-ADUser -EmailAddress $Email -Server $DCServer
-                Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username
-            }
+                #Verify student email matches
+                if ($ADStudent.EmailAddress -ne $Email){
+                    $ADStudent | Set-ADUser -EmailAddress $Email -Server $DCServer
+                    Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username
+                }
             
-            #Verify student info with records
-            if (($ADStudent.GivenName -ne $Student."Stu First Name") -or ($ADStudent.Surname -ne $Student."Stu Last Name")){
+                #Verify student info with records
+                if (($ADStudent.GivenName -ne $Student.'Stu First Name') -or ($ADStudent.Surname -ne $Student.'Stu Last Name')){
 
-                $ADStudent | Set-ADUser -DisplayName "$(($Student."Stu First Name").ToUpper()) $(($Student."Stu Last Name").ToUpper())" `
-                                        -SamAccountName $SamAccount `
-                                        -GivenName $(($Student."Stu First Name").ToUpper()) `
-                                        -Surname $(($Student."Stu Last Name").ToUpper()) `
-                                        -UserPrincipalName ($Username + '@' + 'students.' + $Domain) `
-                                        -Server $DCServer
-                Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username
-            }
+                    $ADStudent | Set-ADUser -DisplayName "$(($Student.'Stu First Name').ToUpper()) $(($Student.'Stu Last Name').ToUpper())" `
+                                            -SamAccountName $SamAccount `
+                                            -GivenName $(($Student.'Stu First Name').ToUpper()) `
+                                            -Surname $(($Student.'Stu Last Name').ToUpper()) `
+                                            -UserPrincipalName ($Username + '@' + 'students.' + $Domain) `
+                                            -Server $DCServer
+                    Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username
+                }
 
-            #Verify account is not disabled
-            if ($ADStudent.Enabled -eq $false -and $ADStudent.Description -ne "do not track" ){
-                $ADStudent | Set-ADUser -Enabled $True
-            }
+                #Verify account is not disabled
+                if ($ADStudent.Enabled -eq $false -and $ADStudent.Description -ne 'do not track' ){
+                    $ADStudent | Set-ADUser -Enabled $True
+                }
 
-            #Verify OU
-            $ADStuOU = $ADStudent.DistinguishedName -replace '^CN=.+?,'
-            if ($ADStuOU -ne $ADOU){
-                Move-ADObject -Identity $ADStudent.ObjectGUID -TargetPath $ADOU -Server $DCServer
-                #Remove old default groups
-                foreach ($OldGroup in $ADStudent.MemberOf){
-                    if ($OldGroup -notlike "*GRP_StudentAccount*"){
-                        Remove-ADGroupMember -Identity $OldGroup -Members $ADStudent.ObjectGUID -Server $DCServer -Confirm:$False
+                #Verify OU
+                $ADStuOU = $ADStudent.DistinguishedName -replace '^CN=.+?,'
+                if ($ADStuOU -ne $ADOU){
+                    Move-ADObject -Identity $ADStudent.ObjectGUID -TargetPath $ADOU -Server $DCServer
+                    #Remove old default groups
+                    foreach ($OldGroup in $ADStudent.MemberOf){
+                        if ($OldGroup -notlike '*GRP_StudentAccount*'){
+                            Remove-ADGroupMember -Identity $OldGroup -Members $ADStudent.ObjectGUID -Server $DCServer -Confirm:$False
+                        }
+                    }
+                    #add new default groups
+                    foreach ($ADGroup in $ADGroups){
+                        Add-ADGroupMember -Identity $ADGroup -Members $SamAccount -Server $DCServer
                     }
                 }
-                #add new default groups
-                $ADGroups | ForEach-Object {Add-ADGroupMember -Identity $_ -Members $SamAccount -Server $DCServer}
-            }
+									   
+																												  
+			 
 
-            #Remove grace window if found
-            if ($ADStudent.Description -like 'To be Disabled:*'){
-                $ADStudent | Set-ADUser -Description $null -Server $DCServer
-            }
+                #Remove grace window if found
+                if ($ADStudent.Description -like 'To be Disabled:*'){
+                    $ADStudent | Set-ADUser -Description $null -Server $DCServer
+                }
 
-        }else{
+            }else{
                 #Student does not exist in AD, create
 
-                #DEFAULT STUDENT PASSWORD
+										 
                 $PWD = "default$($Student."Lunch Pin Num")"
-            Try {
-                New-ADUser -Name $Username `
-                           -DisplayName "$(($Student."Stu First Name").ToUpper()) $(($Student."Stu Last Name").ToUpper())" `
-                           -Path $ADOU `
-                           -AccountPassword (ConvertTo-SecureString $PWD -AsPlainText -Force) `
-                           -Enabled 1 `
-                           -GivenName $(($Student."Stu First Name").ToUpper()) `
-                           -Surname $(($Student."Stu Last Name").ToUpper()) `
-                           -EmployeeID $($Student.'Other ID') `
-                           -UserPrincipalName ($Username + '@' + 'students.' + $Domain) `
-                           -SamAccountName $SamAccount `
-                           -EmailAddress $Email `
-                           -CannotChangePassword $true `
-                           -Server $DCServer
-            }catch{
-                $ErrorMessage = "Error with student $Username, ID: $($Student.'Other ID')"
-                if ($Error[0] -like "*is not unique forest-wide*"){
+                Try {
+                    New-ADUser -Name $Username `
+                               -DisplayName "$(($Student.'Stu First Name').ToUpper()) $(($Student.'Stu Last Name').ToUpper())" `
+                               -Path $ADOU `
+                               -AccountPassword (ConvertTo-SecureString $PWD -AsPlainText -Force) `
+                               -Enabled 1 `
+                               -GivenName $(($Student.'Stu First Name').ToUpper()) `
+                               -Surname $(($Student.'Stu Last Name').ToUpper()) `
+                               -EmployeeID $($Student.'Other ID') `
+                               -UserPrincipalName ($Username + '@' + 'students.' + $Domain) `
+                               -SamAccountName $SamAccount `
+                               -EmailAddress $Email `
+                               -CannotChangePassword $true `
+                               -Server $DCServer
+                }catch{
+                    $ErrorMessage = "Error with student $Username, ID: $($Student.'Other ID')"
+                                                if ($Error[0] -like '*is not unique forest-wide*'){
                     #possible duplicate because Other ID changed
                     $ADDuplicate = $ADStudents | where {$_.SamAccountName -eq $SamAccount}
                     if ($ADDuplicate){
@@ -360,30 +374,34 @@ foreach ($Student in $SkywardStudents){
                     }
                 }
                 
-                Write-Host $ErrorMessage -ForegroundColor Red
-                Write-Output $ErrorMessage | Out-File $Log -Append
-                $Error[0] | Out-File $Log -Append
-                $ErrorEmail = $ErrorEmail + "<p>$ErrorMessage</p>" + "<pre>$($Error[0])</pre>"
-                Continue
+                    Write-Host $ErrorMessage -ForegroundColor Red
+                    Write-Output $ErrorMessage | Out-File $Log -Append
+                    $Error[0] | Out-File $Log -Append
+                    $ErrorEmail = $ErrorEmail + "<p>$ErrorMessage</p>" + "<pre>$($Error[0])</pre>"
+                    Continue
+                }
+                $NewStudent = New-Object PSObject
+                $NewStudent | Add-Member NoteProperty NAME "$(($Student.'Stu First Name').ToUpper()) $(($Student.'Stu Last Name').ToUpper())"
+                $NewStudent | Add-Member NoteProperty SAM  $SamAccount
+                $NewStudent | Add-Member NoteProperty PWD  $PWD
+                $ParentEmails = [System.Collections.ArrayList]@()
+                        if ($Student.'F1/G1 Email'){
+                $ParentEmails.Add($Student.'F1/G1 Email') > $null
             }
-            $NewStudent = New-Object PSObject
-            $NewStudent | Add-Member NoteProperty NAME "$(($Student."Stu First Name").ToUpper()) $(($Student."Stu Last Name").ToUpper())"
-            $NewStudent | Add-Member NoteProperty SAM  $SamAccount
-            $NewStudent | Add-Member NoteProperty PWD  $PWD
-            $ParentEmails = [System.Collections.ArrayList]@()
-            if ($Student.'F1/G1 Email'){
-                $ParentEmails.Add($Student.'F1/G1 Email') | Out-Null
+                        if ($Student.'F1/G2 Email'){
+                $ParentEmails.Add($Student.'F1/G2 Email') > $null
             }
-            if ($Student.'F1/G2 Email'){
-                $ParentEmails.Add($Student.'F1/G2 Email') | Out-Null
-            }
-            $ParentEmails = $ParentEmails -join ','
-            $NewStudent | Add-Member NoteProperty PEMAILS $ParentEmails
-            $NewStudents.Add($NewStudent) | Out-Null
+                $ParentEmails = $ParentEmails -join ','
+                $NewStudent | Add-Member NoteProperty PEMAILS $ParentEmails
+                $NewStudents.Add($NewStudent) > $null
 
-            #Add to student group
-            $ADGroups | ForEach-Object {Add-ADGroupMember -Identity $_ -Members $SamAccount -Server $DCServer}
+								 
+																											  
 
+                #Add to student group
+                foreach ($ADGroup in $ADGroups){
+                    Add-ADGroupMember -Identity $ADGroup -Members $SamAccount -Server $DCServer
+                }
             }
         }
         if ($Progress){
@@ -403,10 +421,10 @@ if ($Progress){
 }
 
 #check for users no longer in AD
-Write-Verbose "Checking for orphaned students." -Verbose
-$ADStudents = Get-AdUser -LDAPFilter "(&(objectCategory=user)(memberof=CN=GRP_StudentAccount,$StudentRootOU))" `
+Write-Verbose 'Checking for orphaned students.' -Verbose
+$ADStudents = Get-AdUser -LDAPFilter "(&(objectCategory=user)(memberof=CN=GRP_StudentAccount,$StudentRootOU)(!userAccountControl:1.2.840.113556.1.4.803:=2)(!(description=do not track)))" `
                          -Properties Name,EmailAddress,DistinguishedName,Description,EmployeeID,Enabled,MemberOf,ObjectGUID `
-                         -Server $DCServer | Where-Object {$_.Enabled -eq $True -and $_.Description -ne "do not track"}
+                         -Server $DCServer
 $OrphanedStudents = Compare-Object -ReferenceObject $SkywardStudents."Other ID" -DifferenceObject $ADStudents.EmployeeID |`
                     Where {$_.SideIndicator -eq '=>'} |`
                     Select InputObject
@@ -423,7 +441,16 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
 
     #Variables
     $GradStudent = $null
-    $OADStudent = $ADStudents | Where-Object EmployeeID -eq $OStudentID
+
+    #find orphaned student in table
+    $OADStudent = $null
+    foreach ($s in $ADStudents){
+        if ($s.EmployeeID -eq $OStudentID){
+                $OADStudent = $s
+                continue
+        }
+    }
+
     $OADSOU = $OADStudent.DistinguishedName -replace '^CN=.+?,'
 
     #pull grad year from OU
@@ -431,9 +458,9 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
     
     #Archive OU Prep
     if ($GradYear -le $CurrentYear){
-        $DisableOU = "OU=zzGraduates,"
+        $DisableOU = 'OU=zzGraduates,'
     }else{
-        $DisableOU = "OU=Inactive Students,"
+        $DisableOU = 'OU=Inactive Students,'
     }
     $ArchiveOU = "OU=$CurrentYear," + $DisableOU + $StudentRootOU
     #Check/create archive year OUs
@@ -445,11 +472,11 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
         
     ########################   NORMAL GRADUATES   ########################
     #Verify grad year with date
-    if ($GradYear -match "^\d+$"){
+    if ($GradYear -match '^\d+$'){
         if ($GradYear -eq $CurrentYear){
             if ($CurrentMonth -in 6..8){
                 $GradStudent = $true
-                if (($OADSOU -split ',')[1] -ne "OU=zzGraduates"){
+                if (($OADSOU -split ',')[1] -ne 'OU=zzGraduates'){
                     #First detection of student graduation. Move account and notify student
                     $MailBody = @"
                         <style>
@@ -466,6 +493,10 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
                         <p>If you have any data you want to keep (emails, google docs) please see <a href="https://support.google.com/accounts/answer/6386856" target="_blank">this support page</a>.</p>
 "@
                     Send-MailMessage -SmtpServer "smtp-relay.gmail.com" -To "$($OADStudent.EmailAddress)" -From "noreply@domain.net" -Subject "Account Closure Notice" -Body $MailBody -BodyAsHtml
+
+                    #Remove license
+                    Remove-ADGroupMember -Identity 'GRP_StudentLicense' -Members $OADStudent.ObjectGUID -Server $DCServer -Confirm:$False -ErrorAction Ignore
+
                     #move OU
                     Move-ADObject -Identity $OADStudent.ObjectGUID -TargetPath $ArchiveOU -Server $DCServer
                 }
@@ -498,7 +529,7 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
             }
 
             #Email grads giving two week notice
-            if (($OADSOU -split ',')[1] -eq "OU=zzGraduates"){
+            if (($OADSOU -split ',')[1] -eq 'OU=zzGraduates'){
                 $MailBody = @"
                     <style>
                         body,p,h3 { font-family: calibri; }
@@ -543,7 +574,7 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
 
             }
 
-            $GraceStudents.Add($OADStudent.Name) | Out-Null
+            $GraceStudents.Add($OADStudent.Name) > $null
             Continue
         }else{
             #within grace window, skip disable for now
@@ -556,13 +587,13 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
 
         #Remove groups
         foreach ($OldGroup in $OADStudent.MemberOf){
-            if ($OldGroup -notlike "CN=GRP_StudentAccount,*"){
+            if ($OldGroup -notlike 'CN=GRP_StudentAccount,*'){
                 Remove-ADGroupMember -Identity $OldGroup -Members $OADStudent.ObjectGUID -Server $DCServer -Confirm:$False
             }
         }
 
         #add account to array to keep track and disable
-        $DisabledStudents.Add($OADStudent.Name) | Out-Null
+        $DisabledStudents.Add($OADStudent.Name) > $null
         $OADStudent | Disable-ADAccount -Server $DCServer
         #move to archive OU if not already there
         if ($OADSOU -ne $ArchiveOU){
@@ -571,28 +602,35 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
     }
     $i++
 }
-Write-Progress -Activity "Checking for Orphaned Students" -Completed
+Write-Progress -Activity 'Checking for Orphaned Students' -Completed
 
 #Sync changes with Google via GCDS
-Write-Verbose "Running GCDS Student sync" -Verbose
+Write-Verbose 'Running GCDS Student sync' -Verbose
 if ($env:COMPUTERNAME -eq $GCDSServer){
-    ."\\domain.net\dfs\AdminScripts\Scheduled-Tasks\Start-GCDS.ps1"
+    .'\\domain.net\dfs\AdminScripts\Scheduled-Tasks\Start-GCDS.ps1'
 }else{
-    Start-ScheduledTask "DOMAIN - GCDS Students" -CimSession $GCDSServer
+    #wait if task already running
+    if ((Get-ScheduledTask 'DOMAIN - GCDS' -CimSession $GCDSServer).State -eq 'Running'){
+        Write-Verbose 'GCDS Task already running. Waiting' -Verbose
+        while ((Get-ScheduledTask 'DOMAIN - GCDS' -CimSession $GCDSServer).State -eq 'Running'){
+            Start-Sleep -s 5
+        }
+    }
+    Start-ScheduledTask 'DOMAIN - GCDS' -CimSession $GCDSServer
     do{
         Start-Sleep -Seconds 1
-    }while ((Get-ScheduledTask "DOMAIN - GCDS Students" -CimSession $GCDSServer).State -eq "Running")
-}
+    }while ((Get-ScheduledTask 'DOMAIN - GCDS' -CimSession $GCDSServer).State -eq "Running")
+}#
 
 
 #Reset Passwords again so sync can be captured.
-Write-Verbose "Processing password and emails for new students." -Verbose
+Write-Verbose 'Processing password and emails for new students.' -Verbose
 $i = 0
 $TotalStudents = $NewStudents.Count
 foreach ($NewStudent in $NewStudents){
     if ($Progress){
         #Progress bar
-        Write-Progress -Activity "Syncing Passwords" -Status "Student $i of $TotalStudents" -PercentComplete ($i / $TotalStudents * 100)
+        Write-Progress -Activity 'Syncing Passwords' -Status "Student $i of $TotalStudents" -PercentComplete ($i / $TotalStudents * 100)
     }
     Set-ADAccountPassword -Identity $NewStudent.SAM -NewPassword (ConvertTo-SecureString $NewStudent.PWD -AsPlainText -Force) -Server $DCServer
 
@@ -613,9 +651,9 @@ foreach ($NewStudent in $NewStudents){
                         tr  { background: #E7FFF9; }
                     </style>
 
-                    <h3>Welcome to District Public Schools</h3>
+                    <h3>Welcome to Public Schools</h3>
 
-                    <p>An account has been created for your student to access their District Public Schools email and other educational digital resources.</p>
+                    <p>An account has been created for your student to access their Public Schools email and other educational digital resources.</p>
                     <p>The following information will be needed for them to log into their district-issued Google account:</p>
                     <p><b>Username:</b> $($NewStudent.SAM)@students.domain.net</p>
                     <p><b>Password:</b> $($NewStudent.PWD)</p>
@@ -636,7 +674,7 @@ if ($ErrorEmail){
     Write-ErrorEmail -ErrorString $ErrorEmail
 }
 
-Write-Progress -Activity "Syncing Passwords" -Completed
+Write-Progress -Activity 'Syncing Passwords' -Completed
 
 #Finish message
 $EndTime = Get-Date
@@ -658,8 +696,8 @@ Write-Host $Message -ForegroundColor Cyan
 Write-Output $Message | Out-File $Log -Append
 
 #Log cleanup
-$MaxLogLength = 150
-$LogText = (Get-Content $Log | Out-String) -split '\*{56}'
+$MaxLogLength = 200
+$LogText = (Get-Content $Log | Out-String) -split '(?=\*{20} Script Started by)'
 if ($LogText.Count -gt $MaxLogLength){
-    ($LogText[($LogText.Count - $MaxLogLength)..$LogText.Count]) -join "$('*' * 56)" | Out-File $Log
+    $LogText | select -Last $MaxLogLength | Out-File $Log
 }

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Install windows updates via powershell
 
@@ -9,38 +9,46 @@
 	Automatically reboot after updates are installed.
 
 .PARAMETER Drivers
-	Checks and updates drivers.
+	Checks for drivers long with windows updates.
+
+.PARAMETER DriversOnly
+	Only checks for drivers
 #>
 [CmdletBinding()]
 param (
 	[switch]$Restart,
-    [switch]$Drivers
+    [switch]$Drivers,
+    [switch]$DriversOnly
 )
 
 #Functions
 function Load-PSWindowsUpdate {
+    #Force TLS Verion
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
     $ModuleError = $null
+	$NuGet = Get-PackageProvider | where {$_.Name -like 'NuGet'}
+    if (!$NuGet){
+        Write-Warning "Installing NuGet Package Provider"
+        Install-PackageProvider NuGet -Force | Out-Null
+		Set-PSRepository PSGallery -InstallationPolicy Trusted | Out-Null
+    }
 	Try {
 		import-module PSWindowsUpdate -ErrorAction Stop
 	}catch{
         $ModuleError = $true
-		Write-Warning "PSWindowsUpdate not found. Installing module"
-					
-		if (([System.Environment]::OSVersion.Version).Major -ne 10){
-			Write-Error "Windows 10 required"
-		}else{
-			Install-PackageProvider NuGet -Force | Out-Null
-			Set-PSRepository PSGallery -InstallationPolicy Trusted | Out-Null
-			Install-Module PSWindowsUpdate -force -confirm:$false | Out-Null
-		}
+		Write-Warning "PSWindowsUpdate not found. Installing module"					
+		Install-Module PSWindowsUpdate -force -confirm:$false | Out-Null
+
 	}
     if ($ModuleError -ne $true){
         #check for updates
+        Write-Verbose "Checking for module updates" -Verbose
         $CurrentAWSPSModule = ((Get-Module -Name PSWindowsUpdate -ListAvailable).Version | Sort-Object -Descending | Select-Object -First 1).ToString()
         $NewestAWSPSModule = (Find-Module -Name PSWindowsUpdate).Version.ToString()
         if ([System.Version]$CurrentAWSPSModule -lt [System.Version]$NewestAWSPSModule){
             Write-Verbose "Module is out of date. Attempting to update" -verbose
-            Update-Module PSWindowsUpdate -force -confirm:$false | Out-Null
+            Update-Module PSWindowsUpdate -force -confirm:$false -ErrorAction SilentlyContinue | Out-Null
         }
         
     }
@@ -63,9 +71,26 @@ if ($Drivers){
 #Check status of module
 Load-PSWindowsUpdate
 
-#Run Updates
-if ($Restart){
-	Install-WindowsUpdate -NotCategory $UpdateCats -NotTitle 'Feature|Preview' -MicrosoftUpdate -AcceptAll -AutoReboot | Out-File $env:ALLUSERSPROFILE\AdminScripts\PSWindowsUpdate.log
-}else{
-	Install-WindowsUpdate -NotCategory $UpdateCats -NotTitle 'Feature|Preview' -MicrosoftUpdate -AcceptAll -IgnoreReboot | Out-File $env:ALLUSERSPROFILE\AdminScripts\PSWindowsUpdate.log
+$InstallParams = @{
+    MicrosoftUpdate = $true
+    AcceptAll = $true
+    NotCategory = @('Feature Packs')
+    NotTitle = 'Feature|Preview'
 }
+
+if ($Restart){
+    $InstallParams.AutoReboot = $true
+}else{
+    $InstallParams.IgnoreReboot = $true
+}
+
+if ($DriversOnly){
+    $InstallParams.Category = 'Drivers'
+}elseif ($Drivers -eq $false){
+    $InstallParams.NotCategory += 'Drivers'
+}
+
+
+
+#Run Updates
+Install-WindowsUpdate @InstallParams | Out-File $env:ALLUSERSPROFILE\AdminScripts\PSWindowsUpdate.log
