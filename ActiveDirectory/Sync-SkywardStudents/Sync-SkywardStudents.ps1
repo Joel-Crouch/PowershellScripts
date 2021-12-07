@@ -697,7 +697,7 @@ Write-Output $Message | Out-File $Log -Append
 
 #Log cleanup
 $MaxLogLength = 200
-$LogText = (Get-Content $Log | Out-String) -split '(?=\*{20} Script Started by)'
+$LogText = (Get-Content $Log | Out-String) -split '(\*{20} Script Started by .+)'
 if ($LogText.Count -gt $MaxLogLength){
     $LogText | select -Last $MaxLogLength | Out-File $Log
 }
