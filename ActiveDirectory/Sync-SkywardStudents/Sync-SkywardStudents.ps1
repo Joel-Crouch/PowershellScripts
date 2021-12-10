@@ -696,8 +696,23 @@ Write-Host $Message -ForegroundColor Cyan
 Write-Output $Message | Out-File $Log -Append
 
 #Log cleanup
-$MaxLogLength = 200
-$LogText = (Get-Content $Log | Out-String) -split '(\*{20} Script Started by .+)'
+$MaxLogLength = 201
+$LogText = (Get-Content $Log | Out-String) -split '\*{20}'
 if ($LogText.Count -gt $MaxLogLength){
-    $LogText | select -Last $MaxLogLength | Out-File $Log
+    $Output = [System.Text.StringBuilder]''
+    $i=$LogText.Count
+    foreach ($Line in $LogText){
+        #skip entry if above max length
+        if ($i -lt $MaxLogLength){
+            if ($Line -ne $null){
+                if ($Line -like ' Script Started by *'){
+                    $Output.AppendLine('*'*20 + $Line + '*'*20) > $null
+                }else{
+                    $Output.AppendLine($Line) > $null
+                }
+            }
+        }
+        $i--
+    }
+    $Output.ToString()
 }
