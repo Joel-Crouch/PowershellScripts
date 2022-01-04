@@ -714,5 +714,5 @@ if ($LogText.Count -gt $MaxLogLength){
         }
         $i--
     }
-    $Output.ToString()
+    $Output.ToString() | Out-File $Log
 }
