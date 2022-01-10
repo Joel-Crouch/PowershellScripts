@@ -704,11 +704,12 @@ if ($LogText.Count -gt $MaxLogLength){
     foreach ($Line in $LogText){
         #skip entry if above max length
         if ($i -lt $MaxLogLength){
-            if ($Line -ne $null){
+            if ($Line -ne ''){
                 if ($Line -like ' Script Started by *'){
                     $Output.AppendLine('*'*20 + $Line + '*'*20) > $null
                 }else{
-                    $Output.AppendLine($Line) > $null
+                    $Output.AppendLine($Line.Trim()) > $null
+                    $Output.AppendLine() > $null
                 }
             }
         }
