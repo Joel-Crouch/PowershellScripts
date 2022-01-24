@@ -369,8 +369,8 @@ foreach ($Student in $SkywardStudents){
                     #possible duplicate because Other ID changed
                     $ADDuplicate = $ADStudents | where {$_.SamAccountName -eq $SamAccount}
                     if ($ADDuplicate){
-                        $ErrorMessage = $ErrorMessage + "`nAn account was found with the same alphakey but using a different other ID.`nOld ID $($ADDuplicate.EmployeeID)" `
-                                                      + "`nVerify and update AD account to correct other ID to resolve conflict."
+                        $ErrorMessage = $ErrorMessage + "`nAn account was found with the same alphakey but using a different other ID.`nOld ID $($ADDuplicate.EmployeeID)." `
+                                                      + "`nVerify and update AD account (AD employee ID attribute) to the correct `"other ID`" to resolve conflict."
                     }
                 }
                 
