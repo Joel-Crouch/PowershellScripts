@@ -300,7 +300,9 @@ foreach ($Student in $SkywardStudents){
                 #Verify student email matches
                 if ($ADStudent.EmailAddress -ne $Email){
                     $ADStudent | Set-ADUser -EmailAddress $Email -Server $DCServer
-                    Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username
+                    Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username -Server $DCServer
+                    $ADStudent = Get-ADUser $Username -Properties Name,EmailAddress,DistinguishedName,Description,EmployeeID,Enabled,MemberOf,ObjectGUID `
+                         -Server $DCServer																																  
                 }
             
                 #Verify student info with records
@@ -312,12 +314,21 @@ foreach ($Student in $SkywardStudents){
                                             -Surname $(($Student.'Stu Last Name').ToUpper()) `
                                             -UserPrincipalName ($Username + '@' + 'students.' + $Domain) `
                                             -Server $DCServer
-                    Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username
+                    Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username -Server $DCServer
+                    $ADStudent = Get-ADUser $Username -Properties Name,EmailAddress,DistinguishedName,Description,EmployeeID,Enabled,MemberOf,ObjectGUID `
+                         -Server $DCServer				  
                 }
 
                 #Verify account is not disabled
                 if ($ADStudent.Enabled -eq $false -and $ADStudent.Description -ne 'do not track' ){
-                    $ADStudent | Set-ADUser -Enabled $True
+                        $ADStudent | Set-ADUser -Enabled $True -ErrorAction Stop
+                    }catch{
+                        $ErrorMessage = "Unable to reenable account"
+                        Write-Host ("$ErrorMessage" + ": $($Error[0])") -ForegroundColor Red
+                        Write-Output $ErrorMessage | Out-File $Log -Append
+                        $Error[0] | Out-File $Log -Append
+                        $ErrorEmail = $ErrorEmail + "<p>$ErrorMessage</p>" + "<pre>$($Error[0])</pre>"
+                    }
                 }
 
                 #Verify OU
@@ -365,14 +376,14 @@ foreach ($Student in $SkywardStudents){
                                -Server $DCServer
                 }catch{
                     $ErrorMessage = "Error with student $Username, ID: $($Student.'Other ID')"
-                                                if ($Error[0] -like '*is not unique forest-wide*'){
-                    #possible duplicate because Other ID changed
-                    $ADDuplicate = $ADStudents | where {$_.SamAccountName -eq $SamAccount}
-                    if ($ADDuplicate){
-                        $ErrorMessage = $ErrorMessage + "`nAn account was found with the same alphakey but using a different other ID.`nOld ID $($ADDuplicate.EmployeeID)." `
-                                                      + "`nVerify and update AD account (AD employee ID attribute) to the correct `"other ID`" to resolve conflict."
-                    }
-                }
+						if ($Error[0] -like '*is not unique forest-wide*'){
+							#possible duplicate because Other ID changed
+							$ADDuplicate = $ADStudents | where {$_.SamAccountName -eq $SamAccount}
+							if ($ADDuplicate){
+								$ErrorMessage = $ErrorMessage + "`nAn account was found with the same alphakey but using a different other ID.`nOld ID $($ADDuplicate.EmployeeID)." `
+															  + "`nVerify and update AD account (AD employee ID attribute) to the correct `"other ID`" to resolve conflict."
+							}
+						}
                 
                     Write-Host $ErrorMessage -ForegroundColor Red
                     Write-Output $ErrorMessage | Out-File $Log -Append
@@ -394,9 +405,6 @@ foreach ($Student in $SkywardStudents){
                 $ParentEmails = $ParentEmails -join ','
                 $NewStudent | Add-Member NoteProperty PEMAILS $ParentEmails
                 $NewStudents.Add($NewStudent) > $null
-
-								 
-																											  
 
                 #Add to student group
                 foreach ($ADGroup in $ADGroups){
