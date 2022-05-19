@@ -15,15 +15,15 @@ WinSCP is used to pull export from FTP server. Account used for automated script
 
 Lines 152 to 157 will need to be adjusted for FTP server and account. WinSCP can generate this for you under Session/Generate URL/Code
 
-Additional skyward entities were used to include with the high school OU. These can be removed or modified on line 253.
+Additional skyward entities were used to include with the high school OU. These can be removed or modified on line 248.
 
-Default student password will need to be adjusted in line 343. In this example, the student password is the string “default” + their lunch pin (e.g. default19293).
+Default student password will need to be adjusted in line 362. In this example, the student password is the string “default” + their lunch pin (e.g. default19293).
 
-Graduate OUs may need to be adjusted in line 440, 442
+Graduate OUs may need to be adjusted starting in the blocks at 467
 
-Email details will need to be adjusted in line 460, 522, and 544
+Email details will need to be adjusted starting at 489, 541, and 562
 
-The scheduled task that runs will need to be adjusted in line 587 and 590
+The scheduled task that runs will need to be adjusted starting in line 615
 
 The script referenced in that line is a simple script used to launch GCDS with logs
 ```
@@ -35,6 +35,6 @@ $LogDir = "\\domain.net\dfs\AdminScripts\AD\Sync-SkywardStudents"
     *> "$LogDir\GCDSSyncOutput.txt"
 ```
 
-Parent email starting on line 614 will need to be adjusted.
+Parent email starting on line 653 will need to be adjusted.
 
 If you have a student that is in skyward but you do not want the script to move the student or make modifications to the account to match what is in skyward, you can put “do not track” in the description field of the student and the script will skip over that student until the description is removed.
