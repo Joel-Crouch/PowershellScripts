@@ -25,15 +25,7 @@ Email details will need to be adjusted starting at 489, 541, and 562
 
 The scheduled task that runs will need to be adjusted starting in line 615
 
-The script referenced in that line is a simple script used to launch GCDS with logs
-```
-$LogDir = "\\domain.net\dfs\AdminScripts\AD\Sync-SkywardStudents"
-
-."C:\Program Files\Google Cloud Directory Sync\sync-cmd.exe" -a `
-    -c "C:\Users\adskywardsync\StudentConfig.xml" `
-    -r "$LogDir\GCDSSyncChanges.txt" `
-    *> "$LogDir\GCDSSyncOutput.txt"
-```
+The script referenced in that line is a simple script used to launch GCDS with logs. It is included in this directory
 
 Parent email starting on line 653 will need to be adjusted.
 
