@@ -26,8 +26,14 @@
 .PARAMETER StudentRootOU
     OU path for root student OU
 
+.PARAMETER StudentGroupDN
+    Distinguished name for the group used to keep track of accounts created by script.
+
 .PARAMETER Log
     Path in which to store script log
+
+.PARAMETER ErrorEmailContact
+    An email or list of emails to contact when an error occurs.
 
 .PARAMETER SanityCount
     Minimum students. Used as a saftey guard incase of bad data pulled from export.
@@ -51,7 +57,9 @@ param (
     [string]$WinSCPPortable = "\\server\software\WinSCP\WinSCP-5.17.7-Portable\WinSCP.com",
     [string]$TempDownload = "\\domain.net\dfs\AdminScripts\AD\Sync-SkywardStudents\",
     [string]$StudentRootOU = "OU=Students,OU=District Users,DC=domain,DC=net",
+    [string]$StudentGroupDN = 'CN=GRP_StudentAccount,OU=Students,OU=District Users,DC=domain,DC=net',
     [string]$Log =  "\\domain.net\dfs\AdminScripts\AD\Sync-SkywardStudents\SkywardSyncLog.txt",
+	$ErrorEmailContact = 'netops@domain.net',
     [int]$SanityCount = 5000,
     [switch]$SkipDownload,
     [switch]$NoEmail
@@ -62,8 +70,8 @@ $NewStudents = New-Object System.Collections.ArrayList
 $DisabledStudents = New-Object System.Collections.ArrayList
 $GraceStudents = New-Object System.Collections.ArrayList
 $Today = Get-Date
-$CurrentYear = Get-Date -Format "yyyy"
-$CurrentMonth = Get-Date -Format "MM"
+$CurrentYear = Get-Date -Format 'yyyy'
+$CurrentMonth = Get-Date -Format 'MM'
 $GraceDate = (Get-Date).AddDays(14) | Get-Date -Format 'MM-dd-yy'
 $ErrorEmail = $null
 
@@ -86,46 +94,50 @@ Function Write-ErrorEmail {
         $ErrorString
         
 "@
-    Send-MailMessage -SmtpServer "smtp-relay.gmail.com" -To "user1@domain.net","user2@domain.net" -From "noreply@domain.net" -Subject "Account Creation Error" -Body $MailBody -BodyAsHtml
+    Send-MailMessage -SmtpServer 'smtp-relay.gmail.com' -To $ErrorEmailContact -From 'noreply@domain.net' -Subject 'Account Creation Error' -Body $MailBody -BodyAsHtml
 }
 
 #Tables used to determine sub OUs basd on skyward entry Entity Name.
 #MODIFY TO FIT YOUR OU STRUCTURE
 #These OUs will all be children of $StudentRootOU
 $StudentOUTable = @{
-    "BV ELEMENTARY"                =  "OU=BVE,OU=Elementary,"
-    "C HARBOR ELEMENTARY"          =  "OU=CHE,OU=Elementary,"
-    "IGRAD ACADEMY"                =  "OU=iGrad Academy,OU=OHHS,"
-    "HILLCREST ELEMENTARY"         =  "OU=HCE,OU=Elementary,"
-    "HOMECONNECTION"               =  "OU=HC,"
-    "NW MIDDLE SCHOOL"             =  "OU=NWMS,"
-    "OH ELEMENTARY"                =  "OU=OHE,OU=Elementary,"
-    "OH HIGH SCHOOL"               =  "OU=OHHS,"
-    "OH INTERMEDIATE"              =  "OU=OHI,"
-    "OH VIRTUAL ACADEMY"           =  "OU=OHVA,"
-    "O VIEW ELEMENTARY"            =  "OU=OVE,OU=Elementary,"
-    "Out of District"              =  "OU=Out of District,OU=Inactive Students,"
-    "PRESCHOOL SPECIAL EDUCATION"  =  "OU=Preschool-Sped,"
-    "RUNNING START"                =  "OU=Running Start,OU=OHHS,"
+    'BV ELEMENTARY'                =  'OU=BVE,OU=Elementary,'
+    'C HARBOR ELEMENTARY'          =  'OU=CHE,OU=Elementary,'
+    'IGRAD ACADEMY'                =  'OU=iGrad Academy,OU=OHHS,'
+    'HILLCREST ELEMENTARY'         =  'OU=HCE,OU=Elementary,'
+    'HOMECONNECTION'               =  'OU=HC,'
+    'NW MIDDLE SCHOOL'             =  'OU=NWMS,'
+    'OH ELEMENTARY'                =  'OU=OHE,OU=Elementary,'
+    'OH HIGH SCHOOL'               =  'OU=OHHS,'
+    'OH INTERMEDIATE'              =  'OU=OHI,'
+    'OH VIRTUAL ACADEMY'           =  'OU=OHVA,'
+    'O VIEW ELEMENTARY'            =  'OU=OVE,OU=Elementary,'
+    'Out of District'              =  'OU=Out of District,OU=Inactive Students,'
+    'PRESCHOOL SPECIAL EDUCATION'  =  'OU=Preschool-Sped,'
+    'RUNNING START'                =  'OU=Running Start,OU=OHHS,'
 }
 
 #Schools that do not have grad years in skyward
 $NoGradYears = @(
-    "HOMECONNECTION",
-    "IGRAD ACADEMY",
-    "PRESCHOOL SPECIAL EDUCATION",
-    "Out of District"
+    'IGRAD ACADEMY',
+    'PRESCHOOL SPECIAL EDUCATION',
+    'Out of District'
 )
 #sets up log
 if(!(Test-Path $Log)){
         New-Item $Log -type file -Force > $null
 }
+#log start time
+$StartTime = Get-Date
+$Message = "`n$("*"*20) Script Started by $env:USERNAME on $env:COMPUTERNAME at $StartTime $("*"*20)"
+Write-Host $Message -ForegroundColor Cyan
+$Message | Out-File -FilePath $Log -Append
 
 #Check if AD module loaded
 try {
     Import-Module ActiveDirectory -ErrorAction Stop
 }catch{
-    $ErrorMessage = "AD module is required for this script. Please install and try again."
+    $ErrorMessage = 'AD module is required for this script. Please install and try again.'
     Write-Host $ErrorMessage -ForegroundColor Red
     Write-Output $ErrorMessage | Out-File $Log -Append
     Write-ErrorEmail -ErrorString "<p>$ErrorMessage</p>"
@@ -152,13 +164,13 @@ if (!$SkipDownload){
     & $WinSCPPortable `
       /ini=nul `
       /command `
-        "open sftp://skyward:password@domain-ftp/ -hostkey=`"`"ssh-ed25519 255 2ma0d9a8a8akwlwKSH1kLO92hs22jh2lo3=`"`"" `
+        "open sftp://skyward:29kaqwpsD@ftp.domain.net/ -hostkey=`"`"ssh-ed25519 255 3mxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=`"`"" `
         "get Student.csv $TempDownload" `
         "exit"
 
     $winscpResult = $LASTEXITCODE
     if ($winscpResult -ne 0){
-        $ErrorMessage = "An error occurred while downloading Student CSV"
+        $ErrorMessage = 'An error occurred while downloading Student CSV'
         Write-Host $ErrorMessage -ForegroundColor Red
         Write-Output $ErrorMessage | Out-File $Log -Append
         Write-ErrorEmail -ErrorString "<p>$ErrorMessage</p>"
@@ -168,7 +180,9 @@ if (!$SkipDownload){
 
 Write-Verbose 'Pulling Students from AD' -verbose
 $SkywardStudents = Import-Csv -Path "$TempDownload\Student.csv"
-$ADStudents = Get-AdUser -LDAPFilter "(&(objectCategory=user)(memberof=CN=GRP_StudentAccount,$StudentRootOU))" `
+
+#memberof is path to group used for tracking
+$ADStudents = Get-AdUser -LDAPFilter "(&(objectCategory=user)(memberof=$StudentGroupDN))" `
                          -Properties Name,EmailAddress,DistinguishedName,Description,EmployeeID,Enabled,MemberOf,ObjectGUID `
                          -Server $DCServer -ErrorAction Stop
 
@@ -177,11 +191,11 @@ if ($SkywardStudents.Count -lt $SanityCount){
     if ($SkipDownload){
         Write-Warning "Student count is under $SanityCount."
         $LowStudentQ = Read-Host "Student count is $($SkywardStudents.Count). Are you sure you want to continue? y|n"
-        if ($LowStudentQ -eq "n"){
+        if ($LowStudentQ -eq 'n'){
             Exit
         }
     }else{
-        $ErrorMessage = "Student count is under $SanityCount. There may be a problem with the skyward CSV. Adjust or use parameter: SanityCount"
+        $ErrorMessage = "Student count is under $SanityCount. Skyward import shows $($SkywardStudents.Count). There may be a problem with the skyward CSV. Adjust or use parameter: SanityCount"
         Write-Host $ErrorMessage -ForegroundColor Red
         Write-Output $ErrorMessage | Out-File $Log -Append
         Write-ErrorEmail -ErrorString "<p>$ErrorMessage</p>"
@@ -190,11 +204,6 @@ if ($SkywardStudents.Count -lt $SanityCount){
 }
 
 ########################   BEGIN VERIFICATION OF STUDENT DATA   ########################
-$StartTime = Get-Date
-$Message = "`n$("*"*20) Script Started by $env:USERNAME on $env:COMPUTERNAME at $StartTime $("*"*20)"
-Write-Host $Message -ForegroundColor Cyan
-$Message | Out-File -FilePath $Log -Append
-
 $i = 1
 $TotalStudents = $SkywardStudents.Count
 foreach ($Student in $SkywardStudents){
@@ -214,7 +223,6 @@ foreach ($Student in $SkywardStudents){
         $ErrorEmail = $ErrorEmail + "<p>$ErrorMessage</p>"
         continue
     }
-    
     $Username = ($Email -split '@' )[0]
 
     #max length for samaccountname is 20
@@ -232,7 +240,7 @@ foreach ($Student in $SkywardStudents){
         }else{
             $ADOU = "OU=$($Student.'Stu Grad Yr')," + $StudentOUTable[$Student.'Entity Name'] + $StudentRootOU
             #Check if OU exists for OUs with grad years
-            if (! [adsi]::Exists("LDAP://$ADOU")){
+            if (! [adsi]::Exists("LDAP://$DCServer/$ADOU")){
                 #OU does not exist create
                 New-ADOrganizationalUnit -Name $($Student.'Stu Grad Yr') -Path ($StudentOUTable[$Student.'Entity Name'] + $StudentRootOU) `
                     -Server $DCServer
@@ -246,7 +254,7 @@ foreach ($Student in $SkywardStudents){
         $ADGroups.Add('GRP_StudentLicense') > $null
         #add other entities to OHHS
         if ('RUNNING START','IGRAD ACADEMY' -contains $Student.'Entity Name'){
-            $ADGroups.Add("OHHS-Students") > $null
+            $ADGroups.Add('OHHS-Students') > $null
         }
 
         $School=($StudentOUTable[$Student.'Entity Name'] -split 'OU=')[1].Replace(',',$null)
@@ -265,18 +273,18 @@ foreach ($Student in $SkywardStudents){
         if ($School -ne 'Out of District'){
             #Check if groups are present and if not create
             #Student Year Group
-            if (($StuGradGroup) -and (![adsi]::Exists("LDAP://CN=$StuGradGroup,OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU"))){
+            if (($StuGradGroup) -and (![adsi]::Exists("LDAP://$DCServer/CN=$StuGradGroup,OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU"))){
                 #Group does not exist create
                 New-ADGroup -Name $StuGradGroup -groupscope Global –path "OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
                     -OtherAttributes @{mail="$StuGradGroup@students.$Domain"} `
                     -Server $DCServer
             }
             #Student School Group
-            if (! [adsi]::Exists("LDAP://CN=$StuSchoolGroup,$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU")){
+            if (! [adsi]::Exists("LDAP://$DCServer/CN=$StuSchoolGroup,$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU")){
                 #Group does not exist create
                 New-ADGroup -Name $StuSchoolGroup -groupscope Global –path "$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
                     -OtherAttributes @{mail="$StuSchoolGroup@students.$Domain"} `
-                    -Server $DCServer -ErrorAction Stop
+                    -Server $DCServer
             }
         }
 
@@ -287,7 +295,7 @@ foreach ($Student in $SkywardStudents){
         #Find student in AD table
         $ADStudent = $null
         foreach ($s in $ADStudents){
-            if ($s.EmployeeID -eq $ID){
+            if ($s.EmployeeID -eq $ID -or $s.SamAccountName -eq $SamAccount){
                  $ADStudent = $s
                  continue
             }
@@ -297,38 +305,39 @@ foreach ($Student in $SkywardStudents){
         if ($ADStudent.Description -ne 'do not track'){
             if ($null -ne $ADStudent){
 
-                #Verify student email matches
-                if ($ADStudent.EmailAddress -ne $Email){
-                    $ADStudent | Set-ADUser -EmailAddress $Email -Server $DCServer
-                    Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username -Server $DCServer
-                    $ADStudent = Get-ADUser $Username -Properties Name,EmailAddress,DistinguishedName,Description,EmployeeID,Enabled,MemberOf,ObjectGUID `
-                         -Server $DCServer																																  
-                }
-            
-                #Verify student info with records
-                if (($ADStudent.GivenName -ne $Student.'Stu First Name') -or ($ADStudent.Surname -ne $Student.'Stu Last Name')){
-
-                    $ADStudent | Set-ADUser -DisplayName "$(($Student.'Stu First Name').ToUpper()) $(($Student.'Stu Last Name').ToUpper())" `
-                                            -SamAccountName $SamAccount `
-                                            -GivenName $(($Student.'Stu First Name').ToUpper()) `
-                                            -Surname $(($Student.'Stu Last Name').ToUpper()) `
-                                            -UserPrincipalName ($Username + '@' + 'students.' + $Domain) `
-                                            -Server $DCServer
-                    Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username -Server $DCServer
-                    $ADStudent = Get-ADUser $Username -Properties Name,EmailAddress,DistinguishedName,Description,EmployeeID,Enabled,MemberOf,ObjectGUID `
-                         -Server $DCServer				  
-                }
-
                 #Verify account is not disabled
-                if ($ADStudent.Enabled -eq $false -and $ADStudent.Description -ne 'do not track' ){
-                        $ADStudent | Set-ADUser -Enabled $True -ErrorAction Stop
+                if ($ADStudent.Enabled -eq $false){
+                    Try{
+                        Set-ADUser -Identity $ADStudent.ObjectGUID -Enabled $True -ErrorAction Stop
                     }catch{
-                        $ErrorMessage = "Unable to reenable account"
+                        $ErrorMessage = "Unable to reenable $($ADStudent.SamAccountName)"
                         Write-Host ("$ErrorMessage" + ": $($Error[0])") -ForegroundColor Red
                         Write-Output $ErrorMessage | Out-File $Log -Append
                         $Error[0] | Out-File $Log -Append
                         $ErrorEmail = $ErrorEmail + "<p>$ErrorMessage</p>" + "<pre>$($Error[0])</pre>"
                     }
+                }
+
+                #Remove grace window if found
+                if ($ADStudent.Description -like 'To be Disabled:*'){
+                    Set-ADUser -Identity $ADStudent.ObjectGUID -Description $null -Server $DCServer
+                }
+            
+                #Verify student info with records
+                if (($ADStudent.GivenName -ne $Student.'Stu First Name') -or ($ADStudent.Surname -ne $Student.'Stu Last Name')){
+                    Set-ADUser -Identity $ADStudent.ObjectGUID -DisplayName "$(($Student.'Stu First Name').ToUpper()) $(($Student.'Stu Last Name').ToUpper())" `
+                                            -SamAccountName $SamAccount `
+                                            -GivenName $(($Student.'Stu First Name').ToUpper()) `
+                                            -Surname $(($Student.'Stu Last Name').ToUpper()) `
+                                            -UserPrincipalName ($Username + '@' + 'students.' + $Domain) `
+                                            -EmailAddress $Email `
+                                            -Server $DCServer
+                    Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username -Server $DCServer
+                
+                #Verify student email matches
+                }elseif ($ADStudent.EmailAddress -ne $Email){
+                    Set-ADUser -Identity $ADStudent.ObjectGUID -EmailAddress $Email -Server $DCServer
+                    Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username -Server $DCServer
                 }
 
                 #Verify OU
@@ -343,22 +352,12 @@ foreach ($Student in $SkywardStudents){
                     }
                     #add new default groups
                     foreach ($ADGroup in $ADGroups){
-                        Add-ADGroupMember -Identity $ADGroup -Members $SamAccount -Server $DCServer
+                        Add-ADGroupMember -Identity $ADGroup -Members $ADStudent.ObjectGUID -Server $DCServer
                     }
-                }
-									   
-																												  
-			 
-
-                #Remove grace window if found
-                if ($ADStudent.Description -like 'To be Disabled:*'){
-                    $ADStudent | Set-ADUser -Description $null -Server $DCServer
                 }
 
             }else{
                 #Student does not exist in AD, create
-
-										 
                 $PWD = "default$($Student."Lunch Pin Num")"
                 Try {
                     New-ADUser -Name $Username `
@@ -376,14 +375,14 @@ foreach ($Student in $SkywardStudents){
                                -Server $DCServer
                 }catch{
                     $ErrorMessage = "Error with student $Username, ID: $($Student.'Other ID')"
-						if ($Error[0] -like '*is not unique forest-wide*'){
-							#possible duplicate because Other ID changed
-							$ADDuplicate = $ADStudents | where {$_.SamAccountName -eq $SamAccount}
-							if ($ADDuplicate){
-								$ErrorMessage = $ErrorMessage + "`nAn account was found with the same alphakey but using a different other ID.`nOld ID $($ADDuplicate.EmployeeID)." `
-															  + "`nVerify and update AD account (AD employee ID attribute) to the correct `"other ID`" to resolve conflict."
-							}
-						}
+                        if ($Error[0] -like '*is not unique forest-wide*'){
+                            #possible duplicate because Other ID changed
+                            $ADDuplicate = $ADStudents | where {$_.SamAccountName -eq $SamAccount}
+                            if ($ADDuplicate){
+                                $ErrorMessage = $ErrorMessage + "`nAn account was found with the same alphakey but using a different other ID.`nOld ID $($ADDuplicate.EmployeeID)." `
+                                                              + "`nVerify and update AD account (AD employee ID attribute) to the correct `"other ID`" to resolve conflict."
+                            }
+                        }
                 
                     Write-Host $ErrorMessage -ForegroundColor Red
                     Write-Output $ErrorMessage | Out-File $Log -Append
@@ -425,15 +424,15 @@ foreach ($Student in $SkywardStudents){
 }
 
 if ($Progress){
-    Write-Progress -Activity "Processing Skyward Data" -Completed
+    Write-Progress -Activity 'Processing Skyward Data' -Completed
 }
 
 #check for users no longer in AD
 Write-Verbose 'Checking for orphaned students.' -Verbose
-$ADStudents = Get-AdUser -LDAPFilter "(&(objectCategory=user)(memberof=CN=GRP_StudentAccount,$StudentRootOU)(!userAccountControl:1.2.840.113556.1.4.803:=2)(!(description=do not track)))" `
+$ActiveADStudents = Get-AdUser -LDAPFilter "(&(objectCategory=user)(memberof=$StudentGroupDN)(!userAccountControl:1.2.840.113556.1.4.803:=2)(!(description=do not track)))" `
                          -Properties Name,EmailAddress,DistinguishedName,Description,EmployeeID,Enabled,MemberOf,ObjectGUID `
                          -Server $DCServer
-$OrphanedStudents = Compare-Object -ReferenceObject $SkywardStudents."Other ID" -DifferenceObject $ADStudents.EmployeeID |`
+$OrphanedStudents = Compare-Object -ReferenceObject $SkywardStudents.'Other ID' -DifferenceObject $ActiveADStudents.EmployeeID |`
                     Where {$_.SideIndicator -eq '=>'} |`
                     Select InputObject
 
@@ -444,7 +443,7 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
 
     if ($Progress){
         #Progress bar
-        Write-Progress -Activity "Processing Orphaned Students" -Status "Student $i of $TotalStudents" -PercentComplete ($i / $TotalStudents * 100)
+        Write-Progress -Activity 'Processing Orphaned Students' -Status "Student $i of $TotalStudents" -PercentComplete ($i / $TotalStudents * 100)
     }
 
     #Variables
@@ -452,7 +451,7 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
 
     #find orphaned student in table
     $OADStudent = $null
-    foreach ($s in $ADStudents){
+    foreach ($s in $ActiveADStudents){
         if ($s.EmployeeID -eq $OStudentID){
                 $OADStudent = $s
                 continue
@@ -462,7 +461,7 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
     $OADSOU = $OADStudent.DistinguishedName -replace '^CN=.+?,'
 
     #pull grad year from OU
-    $GradYear = (($OADStudent.DistinguishedName -split ",")[1] -split "OU=")[1]
+    $GradYear = (($OADStudent.DistinguishedName -split ',')[1] -split 'OU=')[1]
     
     #Archive OU Prep
     if ($GradYear -le $CurrentYear){
@@ -500,7 +499,7 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
                         <p>There will be another message to remind you two weeks before closing your account</p>
                         <p>If you have any data you want to keep (emails, google docs) please see <a href="https://support.google.com/accounts/answer/6386856" target="_blank">this support page</a>.</p>
 "@
-                    Send-MailMessage -SmtpServer "smtp-relay.gmail.com" -To "$($OADStudent.EmailAddress)" -From "noreply@domain.net" -Subject "Account Closure Notice" -Body $MailBody -BodyAsHtml
+                    Send-MailMessage -SmtpServer 'smtp-relay.gmail.com' -To "$($OADStudent.EmailAddress)" -From 'noreply@domain.net' -Subject 'District Account Closure Notice' -Body $MailBody -BodyAsHtml
 
                     #Remove license
                     Remove-ADGroupMember -Identity 'GRP_StudentLicense' -Members $OADStudent.ObjectGUID -Server $DCServer -Confirm:$False -ErrorAction Ignore
@@ -552,7 +551,7 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
                     <p>This is the final warning before closure.</p>
                     <p>If you have any data you want to keep (emails, google docs) please see <a href="https://support.google.com/accounts/answer/6386856" target="_blank">this support page</a>.</p>
 "@
-                Send-MailMessage -SmtpServer "smtp-relay.gmail.com" -To "$($OADStudent.EmailAddress)" -From "noreply@domain.net" -Subject "Account Closure Two Week Notice" -Body $MailBody -BodyAsHtml
+                Send-MailMessage -SmtpServer 'smtp-relay.gmail.com' -To "$($OADStudent.EmailAddress)" -From 'noreply@domain.net' -Subject 'District Account Closure Two Week Notice' -Body $MailBody -BodyAsHtml
             }
 
             ########################   EARLY GRADUATES   ########################
@@ -574,7 +573,7 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
                     <p>The scheduled date for closure is $GraceDate</p>
                     <p>As a reminder, if you have any data you want to keep (emails, google docs) please see <a href="https://support.google.com/accounts/answer/6386856" target="_blank">this support page</a>.</p>
 "@
-                Send-MailMessage -SmtpServer "smtp-relay.gmail.com" -To "$($OADStudent.EmailAddress)" -From "noreply@domain.net" -Subject "Account Closure Two week Notice" -Body $MailBody -BodyAsHtml
+                Send-MailMessage -SmtpServer 'smtp-relay.gmail.com' -To "$($OADStudent.EmailAddress)" -From 'noreply@domain.net' -Subject 'District Account Closure Two week Notice' -Body $MailBody -BodyAsHtml
                 #move to archive OU if not already there
                 if ($OADSOU -ne $ArchiveOU){
                     Move-ADObject -Identity $OADStudent.ObjectGUID -TargetPath $ArchiveOU -Server $DCServer
@@ -592,7 +591,6 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
         }
 
         ####################    DISABLE ACCOUNT    ####################
-
         #Remove groups
         foreach ($OldGroup in $OADStudent.MemberOf){
             if ($OldGroup -notlike 'CN=GRP_StudentAccount,*'){
@@ -615,20 +613,11 @@ Write-Progress -Activity 'Checking for Orphaned Students' -Completed
 #Sync changes with Google via GCDS
 Write-Verbose 'Running GCDS Student sync' -Verbose
 if ($env:COMPUTERNAME -eq $GCDSServer){
-    .'\\domain.net\dfs\AdminScripts\Scheduled-Tasks\Start-GCDS.ps1'
+    &'\\domain.net\dfs\AdminScripts\Scheduled-Tasks\Start-GCDS.ps1'
 }else{
-    #wait if task already running
-    if ((Get-ScheduledTask 'DOMAIN - GCDS' -CimSession $GCDSServer).State -eq 'Running'){
-        Write-Verbose 'GCDS Task already running. Waiting' -Verbose
-        while ((Get-ScheduledTask 'DOMAIN - GCDS' -CimSession $GCDSServer).State -eq 'Running'){
-            Start-Sleep -s 5
-        }
-    }
-    Start-ScheduledTask 'DOMAIN - GCDS' -CimSession $GCDSServer
-    do{
-        Start-Sleep -Seconds 1
-    }while ((Get-ScheduledTask 'DOMAIN - GCDS' -CimSession $GCDSServer).State -eq "Running")
-}#
+    #More verbose script if not running on server
+    &'\\domain.net\dfs\AdminScripts\Tools\Start-ADGoogleSync.ps1' -RunOnce
+}
 
 
 #Reset Passwords again so sync can be captured.
@@ -669,7 +658,7 @@ foreach ($NewStudent in $NewStudents){
 
                     <p>If you have found any typos in your child's name, please contact your student's school office to make the appropriate changes.</p>
 "@
-                Send-MailMessage -SmtpServer "smtp-relay.gmail.com" -To $ParentEmail -From "noreply@domain.net" -Subject "Account Creation" -Body $MailBody -BodyAsHtml
+                Send-MailMessage -SmtpServer 'smtp-relay.gmail.com' -To $ParentEmail -From 'noreply@domain.net' -Subject 'Disctrict Account Creation' -Body $MailBody -BodyAsHtml
             }
         }
     }
@@ -678,7 +667,7 @@ foreach ($NewStudent in $NewStudents){
 }
 
 #Send email if errors occured
-if ($ErrorEmail){
+if ($ErrorEmail -and ($env:USERNAME -eq 'adautomation')){
     Write-ErrorEmail -ErrorString $ErrorEmail
 }
 
