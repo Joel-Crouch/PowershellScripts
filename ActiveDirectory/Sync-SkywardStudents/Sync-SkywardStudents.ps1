@@ -164,7 +164,7 @@ if (!$SkipDownload){
     & $WinSCPPortable `
       /ini=nul `
       /command `
-        "open sftp://skyward:29kaqwpsD@ftp.domain.net/ -hostkey=`"`"ssh-ed25519 255 3mxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=`"`"" `
+        "open sftp://skyward:password@ftp.domain.net/ -hostkey=`"`"ssh-ed25519 255 3mxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=`"`"" `
         "get Student.csv $TempDownload" `
         "exit"
 
