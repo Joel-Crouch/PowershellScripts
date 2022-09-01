@@ -29,6 +29,9 @@
 .PARAMETER StudentGroupDN
     Distinguished name for the group used to keep track of accounts created by script.
 
+.PARAMETER DoNotTrackGroupDN
+    Distinguished name for the group used to exclude accounts from being tracked by script.
+
 .PARAMETER Log
     Path in which to store script log
 
@@ -58,6 +61,7 @@ param (
     [string]$TempDownload = "\\domain.net\dfs\AdminScripts\AD\Sync-SkywardStudents\",
     [string]$StudentRootOU = "OU=Students,OU=District Users,DC=domain,DC=net",
     [string]$StudentGroupDN = 'CN=GRP_StudentAccount,OU=Students,OU=District Users,DC=domain,DC=net',
+    [string]$DoNotTrackGroupDN = 'CN=GRP_DoNotTrack,OU=District Users,DC=ohsd,DC=net',
     [string]$Log =  "\\domain.net\dfs\AdminScripts\AD\Sync-SkywardStudents\SkywardSyncLog.txt",
 	$ErrorEmailContact = 'netops@domain.net',
     [int]$SanityCount = 5000,
@@ -302,7 +306,7 @@ foreach ($Student in $SkywardStudents){
         }
         
         #skip if student is set to not track
-        if ($ADStudent.Description -ne 'do not track'){
+        if ($ADStudent.Memberof -notlike '*Grp_DoNotTrack*'){
             if ($null -ne $ADStudent){
 
                 #Verify account is not disabled
@@ -429,7 +433,7 @@ if ($Progress){
 
 #check for users no longer in AD
 Write-Verbose 'Checking for orphaned students.' -Verbose
-$ActiveADStudents = Get-AdUser -LDAPFilter "(&(objectCategory=user)(memberof=$StudentGroupDN)(!userAccountControl:1.2.840.113556.1.4.803:=2)(!(description=do not track)))" `
+$ActiveADStudents = Get-AdUser -LDAPFilter "(&(objectCategory=user)(memberof=$StudentGroupDN)(!userAccountControl:1.2.840.113556.1.4.803:=2)(!(memberof=$DoNotTrackGroupDN)))" `
                          -Properties Name,EmailAddress,DistinguishedName,Description,EmployeeID,Enabled,MemberOf,ObjectGUID `
                          -Server $DCServer
 $OrphanedStudents = Compare-Object -ReferenceObject $SkywardStudents.'Other ID' -DifferenceObject $ActiveADStudents.EmployeeID |`
