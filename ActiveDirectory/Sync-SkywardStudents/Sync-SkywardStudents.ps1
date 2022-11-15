@@ -279,14 +279,14 @@ foreach ($Student in $SkywardStudents){
             #Student Year Group
             if (($StuGradGroup) -and (![adsi]::Exists("LDAP://$DCServer/CN=$StuGradGroup,OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU"))){
                 #Group does not exist create
-                New-ADGroup -Name $StuGradGroup -groupscope Global –path "OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
+                New-ADGroup -Name $StuGradGroup -groupscope Global ï¿½path "OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
                     -OtherAttributes @{mail="$StuGradGroup@students.$Domain"} `
                     -Server $DCServer
             }
             #Student School Group
             if (! [adsi]::Exists("LDAP://$DCServer/CN=$StuSchoolGroup,$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU")){
                 #Group does not exist create
-                New-ADGroup -Name $StuSchoolGroup -groupscope Global –path "$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
+                New-ADGroup -Name $StuSchoolGroup -groupscope Global ï¿½path "$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
                     -OtherAttributes @{mail="$StuSchoolGroup@students.$Domain"} `
                     -Server $DCServer
             }
@@ -301,7 +301,7 @@ foreach ($Student in $SkywardStudents){
         foreach ($s in $ADStudents){
             if ($s.EmployeeID -eq $ID -or $s.SamAccountName -eq $SamAccount){
                  $ADStudent = $s
-                 continue
+                 break
             }
         }
         
@@ -342,6 +342,11 @@ foreach ($Student in $SkywardStudents){
                 }elseif ($ADStudent.EmailAddress -ne $Email){
                     Set-ADUser -Identity $ADStudent.ObjectGUID -EmailAddress $Email -Server $DCServer
                     Rename-ADObject -Identity $ADStudent.ObjectGUID -NewName $Username -Server $DCServer
+                }
+
+                #Verify Other ID
+                if ($ADStudent.EmployeeID -ne $Student.'Other ID'){
+                    Set-ADUser -Identity $ADStudent.ObjectGUID -EmployeeID $Student.'Other ID' -Server $DCServer
                 }
 
                 #Verify OU
@@ -458,7 +463,7 @@ foreach ($OStudentID in $OrphanedStudents.InputObject){
     foreach ($s in $ActiveADStudents){
         if ($s.EmployeeID -eq $OStudentID){
                 $OADStudent = $s
-                continue
+                break
         }
     }
 
