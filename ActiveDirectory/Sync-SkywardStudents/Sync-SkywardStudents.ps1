@@ -279,14 +279,14 @@ foreach ($Student in $SkywardStudents){
             #Student Year Group
             if (($StuGradGroup) -and (![adsi]::Exists("LDAP://$DCServer/CN=$StuGradGroup,OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU"))){
                 #Group does not exist create
-                New-ADGroup -Name $StuGradGroup -groupscope Global �path "OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
+                New-ADGroup -Name $StuGradGroup -groupscope Global path "OU=$($Student.'Stu Grad Yr'),$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
                     -OtherAttributes @{mail="$StuGradGroup@students.$Domain"} `
                     -Server $DCServer
             }
             #Student School Group
             if (! [adsi]::Exists("LDAP://$DCServer/CN=$StuSchoolGroup,$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU")){
                 #Group does not exist create
-                New-ADGroup -Name $StuSchoolGroup -groupscope Global �path "$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
+                New-ADGroup -Name $StuSchoolGroup -groupscope Global path "$($StudentOUTable[$Student.'Entity Name'])$StudentRootOU" `
                     -OtherAttributes @{mail="$StuSchoolGroup@students.$Domain"} `
                     -Server $DCServer
             }
