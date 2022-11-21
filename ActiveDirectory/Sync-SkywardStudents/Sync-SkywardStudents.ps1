@@ -221,7 +221,7 @@ foreach ($Student in $SkywardStudents){
 
     if (!$Email){
         #skip if no email address is found
-        $ErrorMessage = "No email address was found for $($Student.'Stu Alphakey'). Check skyward for this student and give email address."
+        $ErrorMessage = "No email address was found for $($Student.'Stu Alphakey'). Check skyward for this student and assign an email address."
         Write-Warning $ErrorMessage
         Write-Output $ErrorMessage | Out-File $Log -Append
         $ErrorEmail = $ErrorEmail + "<p>$ErrorMessage</p>"
