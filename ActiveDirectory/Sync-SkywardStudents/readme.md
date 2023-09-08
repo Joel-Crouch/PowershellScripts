@@ -27,4 +27,4 @@ The script referenced in that line is a simple script used to launch GCDS with l
 
 Parent email starting on line 698 will need to be adjusted.
 
-If you have a student that is in skyward but you do not want the script to move the student or make modifications to the account to match what is in skyward, you can put “do not track” in the description field of the student and the script will skip over that student until the description is removed.
+If you have a student that is in skyward but you do not want the script to move the student or make modifications to the account to match what is in skyward, you can add the account to a group (as specified in DoNotTrackGroupDN parameter) and the script will skip over that student until the description is removed.
